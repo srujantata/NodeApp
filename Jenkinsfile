@@ -1,33 +1,52 @@
-node {
-    def app
+pipeline {
+    agent any
 
-    stage('Clone repository') {
-        /* Cloning the Repository to our Workspace */
-
-        checkout scm
-    }
-
-    stage('Build image') {
-        /* This builds the actual image */
-
-        app = docker.build("anandr72/nodeapp")
-    }
-
-    stage('Test image') {
-        
-        app.inside {
-            echo "Tests passed"
+    stages {
+        stage('Pre Cleanup Workspace') {
+            steps {
+                script {
+                    sh label: '', script: 'docker system prune -f > /dev/null 2>&1'
+                    cleanWs()
+                }
+            }
         }
-    }
-
-    stage('Push image') {
-        /* 
-			You would need to first register with DockerHub before you can push images to your account
-		*/
-        docker.withRegistry('https://registry.hub.docker.com', 'docker-hub') {
-            app.push("${env.BUILD_NUMBER}")
-            app.push("latest")
-            } 
-                echo "Trying to Push Docker Build to DockerHub"
+        stage('Checkout SCM') {
+            steps {
+                script {
+                    git credentialsId: 'githubid', url: 'https://github.com/srujantata/NodeApp.git'
+                }
+            }
+        }
+        stage('NPM Install') {
+            steps {
+                script {
+                    sh label: '', script: 'npm install'
+                }
+            }
+        }
+        stage('Docker Build') {
+            steps {
+                script {
+                   sh label: '', script: 'docker build -t srujan .'
+                }
+            }
+        }
+        stage('Docker Push to ECR') {
+            steps {
+                script {
+                    docker.withRegistry('https://550323674769.dkr.ecr.us-west-2.amazonaws.com/srujan:latest', 'ecr:us-west-2:AWSCredentials') {
+                        docker.image('srujan').push('latest')
+                    }
+                }
+            }
+        }
+        stage('Post Cleanup Workspace') {
+            steps {
+                script {
+                    sh label: '', script: 'docker system prune -f > /dev/null 2>&1'
+                    cleanWs()
+                }
+            }
+        }
     }
 }
